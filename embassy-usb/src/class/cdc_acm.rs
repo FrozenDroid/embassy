@@ -552,6 +552,25 @@ impl<'d, D: Driver<'d>> embedded_io_async::Read for BufferedReceiver<'d, D> {
     }
 }
 
+impl<'d, D: Driver<'d>> embedded_io_async::BufRead for BufferedReceiver<'d, D> {
+    async fn fill_buf(&mut self) -> Result<&[u8], Self::Error> {
+        // If there is a buffered packet, return data from that first
+        if self.start != self.end {
+            return Ok(&self.buffer[self.start..self.end]);
+        }
+
+        // Read a packet into the internal buffer
+        self.start = 0;
+        self.end = self.receiver.read_packet(&mut self.buffer).await?;
+        Ok(&self.buffer[self.start..self.end])
+    }
+
+    fn consume(&mut self, amt: usize) {
+        assert!(self.start <= self.end);
+        self.start += amt;
+    }
+}
+
 /// Number of stop bits for LineCoding
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
